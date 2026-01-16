@@ -38,7 +38,11 @@ function App() {
   const [cameraAngles, setCameraAngles] = useState({ azimuth: '0', polar: '90', distance: '5' })
   const [inputValue, setInputValue] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showInput, setShowInput] = useState(false)
   const inputRef = useRef(null)
+
+  // Show/hide input based on state
+  const inputVisible = !isSpeaking && !isProcessing && !isGenerating
 
   // Typewriter effect
   const speak = useCallback((text) => {
@@ -145,6 +149,21 @@ function App() {
     greet()
   }, [speak])
 
+  // Animate input visibility
+  useEffect(() => {
+    if (inputVisible) {
+      // Small delay before showing input for smooth transition
+      const timer = setTimeout(() => {
+        setShowInput(true)
+        // Focus input after animation
+        setTimeout(() => inputRef.current?.focus(), 300)
+      }, 200)
+      return () => clearTimeout(timer)
+    } else {
+      setShowInput(false)
+    }
+  }, [inputVisible])
+
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#000' }}>
       <Canvas camera={{ position: [0, 0, 5], fov: 60 }} dpr={[1, 2]}>
@@ -205,15 +224,18 @@ function App() {
         progress={progress}
       />
 
-      {/* Input textbox */}
+      {/* Input textbox with zoom animation */}
       <form onSubmit={handleSubmit} style={{
         position: 'absolute',
         bottom: '180px',
         left: '50%',
-        transform: 'translateX(-50%)',
+        transform: `translateX(-50%) scale(${showInput ? 1 : 0.8})`,
         width: '80%',
         maxWidth: '700px',
         zIndex: 200,
+        opacity: showInput ? 1 : 0,
+        transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease-out',
+        pointerEvents: showInput ? 'auto' : 'none',
       }}>
         <div style={{
           display: 'flex',
