@@ -13,11 +13,8 @@ function CameraTracker({ onAngleChange }) {
   const { camera } = useThree()
 
   useFrame(() => {
-    // Get spherical coordinates from camera position
     const spherical = new THREE.Spherical()
     spherical.setFromVector3(camera.position)
-
-    // Convert to degrees
     const azimuth = THREE.MathUtils.radToDeg(spherical.theta)
     const polar = THREE.MathUtils.radToDeg(spherical.phi)
     const distance = spherical.radius
@@ -37,39 +34,43 @@ function App() {
   const [displayText, setDisplayText] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [mode, setMode] = useState('idle') // 'idle', 'speaking', 'generating'
+  const [mode, setMode] = useState('idle')
   const [cameraAngles, setCameraAngles] = useState({ azimuth: '0', polar: '90', distance: '5' })
+  const [inputValue, setInputValue] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+  const inputRef = useRef(null)
 
   // Typewriter effect
-  const speak = useCallback((text, callback) => {
-    setDisplayText('')
-    setIsSpeaking(true)
-    setMode('speaking')
+  const speak = useCallback((text) => {
+    return new Promise((resolve) => {
+      setDisplayText('')
+      setIsSpeaking(true)
+      setMode('speaking')
 
-    let index = 0
-    const interval = setInterval(() => {
-      if (index < text.length) {
-        setDisplayText(text.slice(0, index + 1))
-        index++
-      } else {
-        clearInterval(interval)
-        setTimeout(() => {
-          setIsSpeaking(false)
-          if (callback) callback()
-        }, 300)
-      }
-    }, 25)
-
-    return () => clearInterval(interval)
+      let index = 0
+      const interval = setInterval(() => {
+        if (index < text.length) {
+          setDisplayText(text.slice(0, index + 1))
+          index++
+        } else {
+          clearInterval(interval)
+          setTimeout(() => {
+            setIsSpeaking(false)
+            setMode('idle')
+            resolve()
+          }, 300)
+        }
+      }, 25)
+    })
   }, [])
 
   // Code generation sequence
-  const generateCode = useCallback(() => {
+  const runCodeGeneration = useCallback(async () => {
     setIsGenerating(true)
     setMode('generating')
     setProgress(0)
 
-    // Progress animation
+    // Start progress animation
     const progressInterval = setInterval(() => {
       setProgress(p => {
         if (p >= 1) {
@@ -80,75 +81,69 @@ function App() {
       })
     }, 100)
 
-    return () => clearInterval(progressInterval)
-  }, [])
+    // Speak while generating
+    await speak("Analyzing requirements... Identifying optimal architecture patterns.")
+    await new Promise(r => setTimeout(r, 500))
+    await speak("Initiating code generation sequence. Deploying holographic workspace.")
+    await new Promise(r => setTimeout(r, 500))
+    await speak("Generating modules... Creating React components... Implementing API integration...")
+    await new Promise(r => setTimeout(r, 6000))
+    await speak("Building type definitions... Optimizing bundle structure...")
+    await new Promise(r => setTimeout(r, 4000))
 
-  // Main sequence
-  useEffect(() => {
-    const sequence = async () => {
-      // Initial greeting
-      await new Promise(resolve => {
-        speak("Good evening, sir. JARVIS online and ready.", resolve)
-      })
+    // Stop generating
+    clearInterval(progressInterval)
+    setProgress(1)
+    await speak("Code generation complete. All modules compiled successfully. System ready for deployment.")
 
-      await new Promise(r => setTimeout(r, 2000))
+    await new Promise(r => setTimeout(r, 1000))
+    setIsGenerating(false)
+    setMode('idle')
+    setProgress(0)
+  }, [speak])
 
-      // Prompt received
-      await new Promise(resolve => {
-        speak("Prompt received: 'Build me an AI assistant with OpenAI integration, voice input, and text-to-speech capabilities.'", resolve)
-      })
+  // Handle user input
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault()
+    if (!inputValue.trim() || isProcessing || isSpeaking) return
 
-      await new Promise(r => setTimeout(r, 1500))
+    const userMessage = inputValue.trim().toLowerCase()
+    setInputValue('')
+    setIsProcessing(true)
 
-      // Analyzing
-      await new Promise(resolve => {
-        speak("Analyzing requirements... Identifying optimal architecture patterns.", resolve)
-      })
+    // Check for code generation triggers
+    const codeKeywords = ['build', 'create', 'generate', 'code', 'make', 'develop', 'write']
+    const shouldGenerateCode = codeKeywords.some(keyword => userMessage.includes(keyword))
 
-      await new Promise(r => setTimeout(r, 1000))
-
-      // Start generating
-      await new Promise(resolve => {
-        speak("Initiating code generation sequence. Deploying holographic workspace.", resolve)
-      })
-
+    if (shouldGenerateCode) {
+      await speak(`Prompt received: "${inputValue.trim()}"`)
       await new Promise(r => setTimeout(r, 500))
-
-      // Generate!
-      generateCode()
-
-      await new Promise(resolve => {
-        speak("Generating OpenAI integration module... Creating React hooks... Implementing voice recognition... Configuring text-to-speech engine...", resolve)
-      })
-
-      await new Promise(r => setTimeout(r, 8000))
-
-      await new Promise(resolve => {
-        speak("Building type definitions... Setting up configuration schema... Optimizing bundle structure...", resolve)
-      })
-
-      await new Promise(r => setTimeout(r, 6000))
-
-      // Complete
-      await new Promise(resolve => {
-        speak("Code generation complete. 8 files created. All modules compiled successfully. System ready for deployment.", resolve)
-      })
-
-      await new Promise(r => setTimeout(r, 3000))
-
-      // Stop generating
-      setIsGenerating(false)
-      setMode('idle')
-      setProgress(0)
-
-      await new Promise(r => setTimeout(r, 2000))
-
-      // Restart sequence
-      sequence()
+      await runCodeGeneration()
+    } else if (userMessage.includes('hello') || userMessage.includes('hi') || userMessage.includes('hey')) {
+      await speak("Good evening, sir. JARVIS online and ready. How may I assist you today?")
+    } else if (userMessage.includes('status') || userMessage.includes('system')) {
+      await speak("All systems operational. Core processors running at optimal efficiency. Network connectivity stable. Ready for your commands, sir.")
+    } else if (userMessage.includes('help')) {
+      await speak("I can assist with code generation, system analysis, and various technical tasks. Simply describe what you'd like me to build or analyze.")
+    } else if (userMessage.includes('thank')) {
+      await speak("You're welcome, sir. Always at your service.")
+    } else {
+      // Default response
+      await speak(`Understood, sir. Processing your request: "${inputValue.trim()}". How would you like me to proceed?`)
     }
 
-    sequence()
-  }, [speak, generateCode])
+    setIsProcessing(false)
+    inputRef.current?.focus()
+  }, [inputValue, isProcessing, isSpeaking, speak, runCodeGeneration])
+
+  // Initial greeting on load
+  useEffect(() => {
+    const greet = async () => {
+      await new Promise(r => setTimeout(r, 1000))
+      await speak("Good evening, sir. JARVIS online and ready. How may I assist you today?")
+    }
+    greet()
+  }, [speak])
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#000' }}>
@@ -156,7 +151,6 @@ function App() {
         <color attach="background" args={['#000004']} />
         <fog attach="fog" args={['#000008', 8, 25]} />
 
-        {/* Star field */}
         <Stars
           radius={50}
           depth={50}
@@ -210,6 +204,83 @@ function App() {
         isGenerating={isGenerating}
         progress={progress}
       />
+
+      {/* Input textbox */}
+      <form onSubmit={handleSubmit} style={{
+        position: 'absolute',
+        bottom: '180px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '80%',
+        maxWidth: '700px',
+        zIndex: 200,
+      }}>
+        <div style={{
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'center',
+        }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={isProcessing ? "Processing..." : "Type a message to JARVIS..."}
+            disabled={isProcessing || isSpeaking}
+            style={{
+              flex: 1,
+              padding: '15px 20px',
+              background: 'rgba(0, 20, 40, 0.9)',
+              border: '1px solid rgba(0, 212, 255, 0.4)',
+              borderRadius: '4px',
+              color: '#e0f7ff',
+              fontFamily: "'Rajdhani', 'Roboto Mono', monospace",
+              fontSize: '16px',
+              outline: 'none',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
+              boxShadow: '0 0 20px rgba(0, 212, 255, 0.1), inset 0 0 20px rgba(0, 212, 255, 0.05)',
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = 'rgba(0, 212, 255, 0.8)'
+              e.target.style.boxShadow = '0 0 30px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.1)'
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = 'rgba(0, 212, 255, 0.4)'
+              e.target.style.boxShadow = '0 0 20px rgba(0, 212, 255, 0.1), inset 0 0 20px rgba(0, 212, 255, 0.05)'
+            }}
+          />
+          <button
+            type="submit"
+            disabled={isProcessing || isSpeaking || !inputValue.trim()}
+            style={{
+              padding: '15px 25px',
+              background: isProcessing || isSpeaking ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0, 212, 255, 0.3)',
+              border: '1px solid rgba(0, 212, 255, 0.5)',
+              borderRadius: '4px',
+              color: '#00d4ff',
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: '14px',
+              letterSpacing: '2px',
+              cursor: isProcessing || isSpeaking ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              textShadow: '0 0 10px #00d4ff',
+              boxShadow: '0 0 15px rgba(0, 212, 255, 0.2)',
+            }}
+            onMouseEnter={(e) => {
+              if (!isProcessing && !isSpeaking) {
+                e.target.style.background = 'rgba(0, 212, 255, 0.4)'
+                e.target.style.boxShadow = '0 0 25px rgba(0, 212, 255, 0.4)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = isProcessing || isSpeaking ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0, 212, 255, 0.3)'
+              e.target.style.boxShadow = '0 0 15px rgba(0, 212, 255, 0.2)'
+            }}
+          >
+            SEND
+          </button>
+        </div>
+      </form>
 
       {/* Scanline overlay */}
       <div style={{
@@ -292,6 +363,10 @@ function App() {
         @keyframes pulse {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.3); opacity: 0.7; }
+        }
+
+        input::placeholder {
+          color: rgba(0, 212, 255, 0.4);
         }
       `}</style>
     </div>
