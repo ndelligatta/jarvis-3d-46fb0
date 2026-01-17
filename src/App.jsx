@@ -8,12 +8,9 @@ import JarvisCore from './components/JarvisCore'
 import CodeGeneration from './components/CodeGeneration'
 import TextInterface from './components/TextInterface'
 
-// Camera angle tracker component with soft azimuth limits
-function CameraTracker({ onAngleChange, controlsRef }) {
+// Camera angle tracker component
+function CameraTracker({ onAngleChange }) {
   const { camera } = useThree()
-
-  const MAX_AZIMUTH = 75 // degrees - soft target
-  const SOFT_ZONE = 30 // degrees - resistance starts at 45°
 
   useFrame(() => {
     const spherical = new THREE.Spherical()
@@ -22,37 +19,8 @@ function CameraTracker({ onAngleChange, controlsRef }) {
     const polar = THREE.MathUtils.radToDeg(spherical.phi)
     const distance = spherical.radius
 
-    const absAzimuth = Math.abs(azimuth)
-    const softStart = MAX_AZIMUTH - SOFT_ZONE // 45 degrees
-
-    // Apply curved resistance as approaching limit
-    if (absAzimuth > softStart) {
-      // How far into the soft zone (0 to 1, can exceed 1 if past limit)
-      const penetration = (absAzimuth - softStart) / SOFT_ZONE
-
-      // Quartic curve (power of 4) - very smooth at start, extremely strong near end
-      // This creates that bezier-like feel: gentle -> steep -> almost impossible
-      const resistance = Math.pow(Math.min(penetration, 1.5), 4)
-
-      // Pushback strength scales dramatically - gets very strong past 70°
-      const pushbackStrength = Math.min(resistance * 0.25, 0.8)
-
-      // Target is the soft boundary - always pull back toward center
-      const targetAzimuth = Math.sign(azimuth) * softStart
-      const targetTheta = THREE.MathUtils.degToRad(targetAzimuth)
-
-      // Lerp camera back with curved strength
-      const newTheta = THREE.MathUtils.lerp(spherical.theta, targetTheta, pushbackStrength)
-      spherical.theta = newTheta
-      camera.position.setFromSpherical(spherical)
-
-      if (controlsRef?.current) {
-        controlsRef.current.update()
-      }
-    }
-
     onAngleChange({
-      azimuth: THREE.MathUtils.radToDeg(spherical.theta).toFixed(1),
+      azimuth: azimuth.toFixed(1),
       polar: polar.toFixed(1),
       distance: distance.toFixed(2)
     })
@@ -73,7 +41,6 @@ function App() {
   const [showInput, setShowInput] = useState(false)
   const [hasGreeted, setHasGreeted] = useState(false)
   const inputRef = useRef(null)
-  const controlsRef = useRef(null)
 
   // Show/hide input based on state - only after initial greeting
   const inputVisible = hasGreeted && !isSpeaking && !isProcessing && !isGenerating
@@ -220,7 +187,7 @@ function App() {
           <CodeGeneration isGenerating={isGenerating} progress={progress} />
         </Suspense>
 
-        <CameraTracker onAngleChange={setCameraAngles} controlsRef={controlsRef} />
+        <CameraTracker onAngleChange={setCameraAngles} />
 
         <EffectComposer>
           <Bloom
@@ -241,15 +208,16 @@ function App() {
         </EffectComposer>
 
         <OrbitControls
-          ref={controlsRef}
           enableZoom={true}
           enablePan={false}
           minDistance={3}
           maxDistance={12}
+          minAzimuthAngle={-Math.PI / 2.4}
+          maxAzimuthAngle={Math.PI / 2.4}
           autoRotate
           autoRotateSpeed={isGenerating ? 0.5 : 0.2}
           enableDamping
-          dampingFactor={0.05}
+          dampingFactor={0.08}
         />
       </Canvas>
 
