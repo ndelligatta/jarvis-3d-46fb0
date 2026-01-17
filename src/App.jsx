@@ -8,9 +8,12 @@ import JarvisCore from './components/JarvisCore'
 import CodeGeneration from './components/CodeGeneration'
 import TextInterface from './components/TextInterface'
 
-// Camera angle tracker component
-function CameraTracker({ onAngleChange }) {
+// Camera angle tracker component with soft azimuth limits
+function CameraTracker({ onAngleChange, controlsRef }) {
   const { camera } = useThree()
+
+  const MAX_AZIMUTH = 75 // degrees
+  const SOFT_ZONE = 15 // degrees before limit where slowdown begins
 
   useFrame(() => {
     const spherical = new THREE.Spherical()
@@ -24,6 +27,38 @@ function CameraTracker({ onAngleChange }) {
       polar: polar.toFixed(1),
       distance: distance.toFixed(2)
     })
+
+    // Soft boundary implementation
+    const absAzimuth = Math.abs(azimuth)
+    const softStart = MAX_AZIMUTH - SOFT_ZONE // 60 degrees
+
+    if (absAzimuth > softStart) {
+      // Calculate how far into the soft zone (0 to 1)
+      const penetration = (absAzimuth - softStart) / SOFT_ZONE
+
+      // Cubic ease-out for smooth deceleration: 1 - (1-t)^3
+      const resistance = 1 - Math.pow(1 - Math.min(penetration, 1), 3)
+
+      // Apply pushback force - stronger as we approach limit
+      const pushbackStrength = resistance * 0.08
+
+      // Calculate target angle (clamp to max)
+      const targetAzimuth = Math.sign(azimuth) * Math.min(absAzimuth, MAX_AZIMUTH)
+      const targetTheta = THREE.MathUtils.degToRad(targetAzimuth)
+
+      // Lerp camera back toward limit with eased strength
+      const currentTheta = spherical.theta
+      const newTheta = THREE.MathUtils.lerp(currentTheta, targetTheta, pushbackStrength)
+
+      // Apply the corrected position
+      spherical.theta = newTheta
+      camera.position.setFromSpherical(spherical)
+
+      // If controls exist, sync them
+      if (controlsRef?.current) {
+        controlsRef.current.update()
+      }
+    }
   })
 
   return null
@@ -41,6 +76,7 @@ function App() {
   const [showInput, setShowInput] = useState(false)
   const [hasGreeted, setHasGreeted] = useState(false)
   const inputRef = useRef(null)
+  const controlsRef = useRef(null)
 
   // Show/hide input based on state - only after initial greeting
   const inputVisible = hasGreeted && !isSpeaking && !isProcessing && !isGenerating
@@ -187,7 +223,7 @@ function App() {
           <CodeGeneration isGenerating={isGenerating} progress={progress} />
         </Suspense>
 
-        <CameraTracker onAngleChange={setCameraAngles} />
+        <CameraTracker onAngleChange={setCameraAngles} controlsRef={controlsRef} />
 
         <EffectComposer>
           <Bloom
@@ -208,6 +244,7 @@ function App() {
         </EffectComposer>
 
         <OrbitControls
+          ref={controlsRef}
           enableZoom={true}
           enablePan={false}
           minDistance={3}
