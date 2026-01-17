@@ -201,9 +201,12 @@ function HudReadouts({ isSpeaking, isGenerating }) {
   )
 }
 
-export default function TextInterface({ text, isSpeaking, isGenerating = false, progress = 0 }) {
+export default function TextInterface({ text, isSpeaking, isGenerating = false, progress = 0, inputVisible = false }) {
   const [cursorVisible, setCursorVisible] = useState(true)
   const [time, setTime] = useState(new Date())
+
+  // Output box is bigger when input is NOT visible (JARVIS is speaking/processing)
+  const isExpanded = !inputVisible
 
   // Blinking cursor
   useEffect(() => {
@@ -229,10 +232,11 @@ export default function TextInterface({ text, isSpeaking, isGenerating = false, 
         position: 'absolute',
         bottom: '50px',
         left: '50%',
-        transform: 'translateX(-50%)',
+        transform: `translateX(-50%) scale(${isExpanded ? 1.1 : 1})`,
         width: '80%',
         maxWidth: '700px',
         pointerEvents: 'none',
+        transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       }}>
         {/* JARVIS label */}
         <div style={{

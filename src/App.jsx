@@ -224,6 +224,7 @@ function App() {
         isSpeaking={isSpeaking}
         isGenerating={isGenerating}
         progress={progress}
+        inputVisible={showInput}
       />
 
       {/* Input textbox with zoom animation */}
