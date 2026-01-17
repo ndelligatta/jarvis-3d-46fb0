@@ -11,70 +11,48 @@ import TextInterface from './components/TextInterface'
 // Camera angle tracker component with soft azimuth limits
 function CameraTracker({ onAngleChange, controlsRef }) {
   const { camera } = useThree()
-  const lastValidSide = useRef(1) // Track which side user was on (1 = positive, -1 = negative)
 
-  const MAX_AZIMUTH = 75 // degrees - HARD LIMIT
-  const SOFT_ZONE = 20 // degrees before limit where slowdown begins
-  const MAX_AZIMUTH_RAD = THREE.MathUtils.degToRad(MAX_AZIMUTH)
+  const MAX_AZIMUTH = 75 // degrees - soft target
+  const SOFT_ZONE = 30 // degrees - resistance starts at 45°
 
   useFrame(() => {
     const spherical = new THREE.Spherical()
     spherical.setFromVector3(camera.position)
-    let azimuth = THREE.MathUtils.radToDeg(spherical.theta)
+    const azimuth = THREE.MathUtils.radToDeg(spherical.theta)
     const polar = THREE.MathUtils.radToDeg(spherical.phi)
     const distance = spherical.radius
 
     const absAzimuth = Math.abs(azimuth)
+    const softStart = MAX_AZIMUTH - SOFT_ZONE // 45 degrees
 
-    // Track which side the user is on (only update when clearly on one side)
-    if (absAzimuth < MAX_AZIMUTH - 5) {
-      lastValidSide.current = azimuth >= 0 ? 1 : -1
-    }
+    // Apply curved resistance as approaching limit
+    if (absAzimuth > softStart) {
+      // How far into the soft zone (0 to 1, can exceed 1 if past limit)
+      const penetration = (absAzimuth - softStart) / SOFT_ZONE
 
-    // HARD CLAMP - Never allow past the limit, period
-    if (absAzimuth > MAX_AZIMUTH) {
-      // Force back to the limit on the SAME SIDE they were on
-      const clampedTheta = lastValidSide.current * MAX_AZIMUTH_RAD
-      spherical.theta = clampedTheta
+      // Quartic curve (power of 4) - very smooth at start, extremely strong near end
+      // This creates that bezier-like feel: gentle -> steep -> almost impossible
+      const resistance = Math.pow(Math.min(penetration, 1.5), 4)
+
+      // Pushback strength scales dramatically - gets very strong past 70°
+      const pushbackStrength = Math.min(resistance * 0.25, 0.8)
+
+      // Target is the soft boundary - always pull back toward center
+      const targetAzimuth = Math.sign(azimuth) * softStart
+      const targetTheta = THREE.MathUtils.degToRad(targetAzimuth)
+
+      // Lerp camera back with curved strength
+      const newTheta = THREE.MathUtils.lerp(spherical.theta, targetTheta, pushbackStrength)
+      spherical.theta = newTheta
       camera.position.setFromSpherical(spherical)
-      azimuth = lastValidSide.current * MAX_AZIMUTH
 
-      // Reset the orbit controls target to prevent fighting
       if (controlsRef?.current) {
         controlsRef.current.update()
       }
     }
-    // SOFT ZONE - Apply resistance as approaching limit
-    else {
-      const softStart = MAX_AZIMUTH - SOFT_ZONE // 55 degrees
-
-      if (absAzimuth > softStart) {
-        // Calculate how far into the soft zone (0 to 1)
-        const penetration = (absAzimuth - softStart) / SOFT_ZONE
-
-        // Cubic ease-out for smooth deceleration
-        const resistance = Math.pow(penetration, 2)
-
-        // Stronger pushback as we get closer to limit
-        const pushbackStrength = resistance * 0.15
-
-        // Push back toward the soft start boundary
-        const targetAzimuth = Math.sign(azimuth) * (softStart + (MAX_AZIMUTH - softStart) * 0.5)
-        const targetTheta = THREE.MathUtils.degToRad(targetAzimuth)
-
-        // Lerp camera back
-        const newTheta = THREE.MathUtils.lerp(spherical.theta, targetTheta, pushbackStrength)
-        spherical.theta = newTheta
-        camera.position.setFromSpherical(spherical)
-
-        if (controlsRef?.current) {
-          controlsRef.current.update()
-        }
-      }
-    }
 
     onAngleChange({
-      azimuth: azimuth.toFixed(1),
+      azimuth: THREE.MathUtils.radToDeg(spherical.theta).toFixed(1),
       polar: polar.toFixed(1),
       distance: distance.toFixed(2)
     })
