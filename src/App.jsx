@@ -11,54 +11,73 @@ import TextInterface from './components/TextInterface'
 // Camera angle tracker component with soft azimuth limits
 function CameraTracker({ onAngleChange, controlsRef }) {
   const { camera } = useThree()
+  const lastValidSide = useRef(1) // Track which side user was on (1 = positive, -1 = negative)
 
-  const MAX_AZIMUTH = 75 // degrees
-  const SOFT_ZONE = 15 // degrees before limit where slowdown begins
+  const MAX_AZIMUTH = 75 // degrees - HARD LIMIT
+  const SOFT_ZONE = 20 // degrees before limit where slowdown begins
+  const MAX_AZIMUTH_RAD = THREE.MathUtils.degToRad(MAX_AZIMUTH)
 
   useFrame(() => {
     const spherical = new THREE.Spherical()
     spherical.setFromVector3(camera.position)
-    const azimuth = THREE.MathUtils.radToDeg(spherical.theta)
+    let azimuth = THREE.MathUtils.radToDeg(spherical.theta)
     const polar = THREE.MathUtils.radToDeg(spherical.phi)
     const distance = spherical.radius
+
+    const absAzimuth = Math.abs(azimuth)
+
+    // Track which side the user is on (only update when clearly on one side)
+    if (absAzimuth < MAX_AZIMUTH - 5) {
+      lastValidSide.current = azimuth >= 0 ? 1 : -1
+    }
+
+    // HARD CLAMP - Never allow past the limit, period
+    if (absAzimuth > MAX_AZIMUTH) {
+      // Force back to the limit on the SAME SIDE they were on
+      const clampedTheta = lastValidSide.current * MAX_AZIMUTH_RAD
+      spherical.theta = clampedTheta
+      camera.position.setFromSpherical(spherical)
+      azimuth = lastValidSide.current * MAX_AZIMUTH
+
+      // Reset the orbit controls target to prevent fighting
+      if (controlsRef?.current) {
+        controlsRef.current.update()
+      }
+    }
+    // SOFT ZONE - Apply resistance as approaching limit
+    else {
+      const softStart = MAX_AZIMUTH - SOFT_ZONE // 55 degrees
+
+      if (absAzimuth > softStart) {
+        // Calculate how far into the soft zone (0 to 1)
+        const penetration = (absAzimuth - softStart) / SOFT_ZONE
+
+        // Cubic ease-out for smooth deceleration
+        const resistance = Math.pow(penetration, 2)
+
+        // Stronger pushback as we get closer to limit
+        const pushbackStrength = resistance * 0.15
+
+        // Push back toward the soft start boundary
+        const targetAzimuth = Math.sign(azimuth) * (softStart + (MAX_AZIMUTH - softStart) * 0.5)
+        const targetTheta = THREE.MathUtils.degToRad(targetAzimuth)
+
+        // Lerp camera back
+        const newTheta = THREE.MathUtils.lerp(spherical.theta, targetTheta, pushbackStrength)
+        spherical.theta = newTheta
+        camera.position.setFromSpherical(spherical)
+
+        if (controlsRef?.current) {
+          controlsRef.current.update()
+        }
+      }
+    }
 
     onAngleChange({
       azimuth: azimuth.toFixed(1),
       polar: polar.toFixed(1),
       distance: distance.toFixed(2)
     })
-
-    // Soft boundary implementation
-    const absAzimuth = Math.abs(azimuth)
-    const softStart = MAX_AZIMUTH - SOFT_ZONE // 60 degrees
-
-    if (absAzimuth > softStart) {
-      // Calculate how far into the soft zone (0 to 1)
-      const penetration = (absAzimuth - softStart) / SOFT_ZONE
-
-      // Cubic ease-out for smooth deceleration: 1 - (1-t)^3
-      const resistance = 1 - Math.pow(1 - Math.min(penetration, 1), 3)
-
-      // Apply pushback force - stronger as we approach limit
-      const pushbackStrength = resistance * 0.08
-
-      // Calculate target angle (clamp to max)
-      const targetAzimuth = Math.sign(azimuth) * Math.min(absAzimuth, MAX_AZIMUTH)
-      const targetTheta = THREE.MathUtils.degToRad(targetAzimuth)
-
-      // Lerp camera back toward limit with eased strength
-      const currentTheta = spherical.theta
-      const newTheta = THREE.MathUtils.lerp(currentTheta, targetTheta, pushbackStrength)
-
-      // Apply the corrected position
-      spherical.theta = newTheta
-      camera.position.setFromSpherical(spherical)
-
-      // If controls exist, sync them
-      if (controlsRef?.current) {
-        controlsRef.current.update()
-      }
-    }
   })
 
   return null
