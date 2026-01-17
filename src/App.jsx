@@ -214,10 +214,12 @@ function App() {
           enablePan={false}
           minDistance={3}
           maxDistance={12}
+          minAzimuthAngle={-Math.PI / 2.4}
+          maxAzimuthAngle={Math.PI / 2.4}
           autoRotate
           autoRotateSpeed={isGenerating ? 0.5 : 0.2}
           enableDamping
-          dampingFactor={0.05}
+          dampingFactor={0.08}
         />
       </Canvas>
 
