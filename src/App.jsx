@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import JarvisCore from './components/JarvisCore'
 import CodeGeneration from './components/CodeGeneration'
 import TextInterface from './components/TextInterface'
+import { askJarvis } from './api/openai'
 
 // Camera angle tracker component
 function CameraTracker({ onAngleChange }) {
@@ -112,29 +113,30 @@ function App() {
     e.preventDefault()
     if (!inputValue.trim() || isProcessing || isSpeaking) return
 
-    const userMessage = inputValue.trim().toLowerCase()
+    const userMessage = inputValue.trim()
+    const userMessageLower = userMessage.toLowerCase()
     setInputValue('')
     setIsProcessing(true)
 
     // Check for code generation triggers
     const codeKeywords = ['build', 'create', 'generate', 'code', 'make', 'develop', 'write']
-    const shouldGenerateCode = codeKeywords.some(keyword => userMessage.includes(keyword))
+    const shouldGenerateCode = codeKeywords.some(keyword => userMessageLower.includes(keyword))
 
-    if (shouldGenerateCode) {
-      await speak(`Prompt received: "${inputValue.trim()}"`)
-      await new Promise(r => setTimeout(r, 500))
-      await runCodeGeneration()
-    } else if (userMessage.includes('hello') || userMessage.includes('hi') || userMessage.includes('hey')) {
-      await speak("Good evening, sir. JARVIS online and ready. How may I assist you today?")
-    } else if (userMessage.includes('status') || userMessage.includes('system')) {
-      await speak("All systems operational. Core processors running at optimal efficiency. Network connectivity stable. Ready for your commands, sir.")
-    } else if (userMessage.includes('help')) {
-      await speak("I can assist with code generation, system analysis, and various technical tasks. Simply describe what you'd like me to build or analyze.")
-    } else if (userMessage.includes('thank')) {
-      await speak("You're welcome, sir. Always at your service.")
-    } else {
-      // Default response
-      await speak(`Understood, sir. Processing your request: "${inputValue.trim()}". How would you like me to proceed?`)
+    try {
+      if (shouldGenerateCode) {
+        // Get AI response first, then run code generation animation
+        const response = await askJarvis(userMessage)
+        await speak(response)
+        await new Promise(r => setTimeout(r, 500))
+        await runCodeGeneration()
+      } else {
+        // Get AI response for regular queries
+        const response = await askJarvis(userMessage)
+        await speak(response)
+      }
+    } catch (error) {
+      console.error('OpenAI API error:', error)
+      await speak("I apologize, sir. I'm experiencing a temporary connection issue with my neural network. Please try again.")
     }
 
     setIsProcessing(false)
