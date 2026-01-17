@@ -39,10 +39,11 @@ function App() {
   const [inputValue, setInputValue] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [showInput, setShowInput] = useState(false)
+  const [hasGreeted, setHasGreeted] = useState(false)
   const inputRef = useRef(null)
 
-  // Show/hide input based on state
-  const inputVisible = !isSpeaking && !isProcessing && !isGenerating
+  // Show/hide input based on state - only after initial greeting
+  const inputVisible = hasGreeted && !isSpeaking && !isProcessing && !isGenerating
 
   // Typewriter effect
   const speak = useCallback((text) => {
@@ -145,6 +146,7 @@ function App() {
     const greet = async () => {
       await new Promise(r => setTimeout(r, 1000))
       await speak("Good evening, sir. JARVIS online and ready. How may I assist you today?")
+      setHasGreeted(true)
     }
     greet()
   }, [speak])
